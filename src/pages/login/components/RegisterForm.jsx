@@ -1,0 +1,295 @@
+import React, { useState } from 'react';
+import Button from '../../../components/ui/Button';
+import Input from '../../../components/ui/Input';
+import Icon from '../../../components/AppIcon';
+import pharmadel from '../../../images/images.jpg';
+
+const RegisterForm = ({ onSwitchToLogin }) => {
+  const [formData, setFormData] = useState({
+    nombre: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    planta: '',
+    puesto: '',
+    rol: ''
+  });
+  const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData?.nombre || formData?.nombre?.length < 3) {
+      newErrors.nombre = 'El nombre debe tener al menos 3 caracteres';
+    }
+
+    if (!formData?.email) {
+      newErrors.email = 'El correo electrónico es obligatorio';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData?.email)) {
+      newErrors.email = 'Por favor, introduce un correo electrónico válido';
+    }
+
+    if (!formData?.password) {
+      newErrors.password = 'La contraseña es obligatoria';
+    } else if (formData?.password?.length < 4) {
+      newErrors.password = 'La contraseña debe tener al menos 4 caracteres';
+    }
+
+    if (!formData?.confirmPassword) {
+      newErrors.confirmPassword = 'Debes confirmar la contraseña';
+    } else if (formData?.password !== formData?.confirmPassword) {
+      newErrors.confirmPassword = 'Las contraseñas no coinciden';
+    }
+
+    if (!formData?.planta) {
+      newErrors.planta = 'La planta es obligatoria';
+    }
+
+    if (!formData?.puesto) {
+      newErrors.puesto = 'El puesto es obligatorio';
+    }
+
+    if (!formData?.rol) {
+      newErrors.rol = 'El rol es obligatorio';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors)?.length === 0;
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e?.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+
+    if (errors?.[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e?.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('https://backend-pharmatrix.onrender.com/api/pharmatrix/sign-up', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          nombre: formData?.nombre,
+          email: formData?.email,
+          password: formData?.password,
+          planta: formData?.planta,
+          puesto: formData?.puesto,
+          rol: formData?.rol
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setErrors({
+          general: data.message || 'Error al crear la cuenta. Por favor, intenta de nuevo.'
+        });
+        return;
+      }
+
+      // Registro exitoso
+      alert('¡Cuenta creada exitosamente! Ahora puedes iniciar sesión.');
+      
+      // Cambiar al formulario de login
+      if (onSwitchToLogin) {
+        onSwitchToLogin();
+      }
+
+    } catch (error) {
+      if (error?.message?.includes('Failed to fetch') || 
+          error?.message?.includes('NetworkError')) {
+        setErrors({
+          general: 'Error de conexión con el servidor. Por favor, verifica tu conexión a internet.'
+        });
+      } else {
+        setErrors({
+          general: 'Error al crear la cuenta. Por favor, inténtalo de nuevo.'
+        });
+        console.error('Error en registro:', error);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="w-full max-w-2xl mx-auto">
+      <div className="bg-card rounded-lg shadow-lg border border-border p-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <img src={pharmadel} alt="Pharmatrix Logo" />
+          </div>
+          <h1 className="text-2xl font-semibold text-foreground mb-2">
+            Crear Cuenta
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            Regístrate en el sistema de gestión farmacéutica
+          </p>
+        </div>
+
+        {/* Error Message */}
+        {errors?.general && (
+          <div className="mb-6 p-4 bg-error/10 border border-error/20 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <Icon name="AlertCircle" size={16} className="text-error" />
+              <p className="text-sm text-error">{errors?.general}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Register Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Grid de 2 columnas */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Input
+              label="Nombre Completo"
+              type="text"
+              name="nombre"
+              placeholder="Tu nombre"
+              value={formData?.nombre}
+              onChange={handleInputChange}
+              error={errors?.nombre}
+              required
+              disabled={isLoading}
+            />
+
+            <Input
+              label="Correo Electrónico"
+              type="email"
+              name="email"
+              placeholder="tu@empresa.com"
+              value={formData?.email}
+              onChange={handleInputChange}
+              error={errors?.email}
+              required
+              disabled={isLoading}
+            />
+
+            <div className="relative">
+              <Input
+                label="Contraseña"
+                type={showPassword ? "text" : "password"}
+                name="password"
+                placeholder="Mínimo 4 caracteres"
+                value={formData?.password}
+                onChange={handleInputChange}
+                error={errors?.password}
+                required
+                disabled={isLoading}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-9 text-muted-foreground hover:text-foreground transition-colors duration-200"
+                disabled={isLoading}
+              >
+                <Icon name={showPassword ? "EyeOff" : "Eye"} size={16} />
+              </button>
+            </div>
+
+            <Input
+              label="Confirmar Contraseña"
+              type={showPassword ? "text" : "password"}
+              name="confirmPassword"
+              placeholder="Repite tu contraseña"
+              value={formData?.confirmPassword}
+              onChange={handleInputChange}
+              error={errors?.confirmPassword}
+              required
+              disabled={isLoading}
+            />
+
+            <Input
+              label="Planta"
+              type="text"
+              name="planta"
+              placeholder="Ej: Farma"
+              value={formData?.planta}
+              onChange={handleInputChange}
+              error={errors?.planta}
+              required
+              disabled={isLoading}
+            />
+
+            <Input
+              label="Puesto"
+              type="text"
+              name="puesto"
+              placeholder="Ej: API"
+              value={formData?.puesto}
+              onChange={handleInputChange}
+              error={errors?.puesto}
+              required
+              disabled={isLoading}
+            />
+          </div>
+
+          {/* Rol ocupa toda la fila */}
+          <Input
+            label="Rol"
+            type="text"
+            name="rol"
+            placeholder="Ej: Doxploy"
+            value={formData?.rol}
+            onChange={handleInputChange}
+            error={errors?.rol}
+            required
+            disabled={isLoading}
+          />
+
+          <Button
+            type="submit"
+            variant="default"
+            fullWidth
+            loading={isLoading}
+            iconName="UserPlus"
+            iconPosition="right"
+            disabled={isLoading}
+          >
+            {isLoading ? 'Creando cuenta...' : 'Crear Cuenta'}
+          </Button>
+        </form>
+
+        {/* Switch to Login */}
+        {onSwitchToLogin && (
+          <div className="mt-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              ¿Ya tienes una cuenta?{' '}
+              <button
+                type="button"
+                onClick={onSwitchToLogin}
+                className="text-primary hover:text-primary/80 font-medium transition-colors duration-200"
+              >
+                Inicia sesión aquí
+              </button>
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default RegisterForm;

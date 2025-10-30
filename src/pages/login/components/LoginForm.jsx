@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../contexts/AuthContext';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import { Checkbox } from '../../../components/ui/Checkbox';
 import Icon from '../../../components/AppIcon';
-import pharmadel from '../../../images/images.jpg'
+import pharmadel from '../../../images/images.jpg';
 
-const LoginForm = () => {
+const LoginForm = ({ onSwitchToRegister }) => {
   const navigate = useNavigate();
-  const { signIn } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -19,27 +17,17 @@ const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Mock credentials for different user roles (Supabase users)
-  /*const mockCredentials = [
-    { email: 'admin@pharmatrace.com', password: 'Admin123!', role: 'Dr. Maria Rodriguez (Admin)' },
-    { email: 'production@pharmatrace.com', password: 'Prod123!', role: 'Carlos Mendez (Production Manager)' },
-    { email: 'quality@pharmatrace.com', password: 'Quality123!', role: 'Ana Silva (Quality Manager)' },
-    { email: 'operator@pharmatrace.com', password: 'Operator123!', role: 'Juan Perez (Operator)' }
-  ];*/
-
   const validateForm = () => {
     const newErrors = {};
 
     if (!formData?.email) {
       newErrors.email = 'El correo electrónico es obligatorio';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/?.test(formData?.email)) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData?.email)) {
       newErrors.email = 'Por favor, introduce un correo electrónico válido';
     }
 
     if (!formData?.password) {
       newErrors.password = 'La contraseña es obligatoria';
-    } else if (formData?.password?.length < 6) {
-      newErrors.password = 'La contraseña debe tener al menos 6 caracteres';
     }
 
     setErrors(newErrors);
@@ -53,7 +41,6 @@ const LoginForm = () => {
       [name]: type === 'checkbox' ? checked : value
     }));
 
-    // Clear error when user starts typing
     if (errors?.[name]) {
       setErrors(prev => ({
         ...prev,
@@ -72,43 +59,51 @@ const LoginForm = () => {
     setIsLoading(true);
 
     try {
-      // Use Supabase authentication
-      const { data, error } = await signIn(formData?.email, formData?.password);
+      const response = await fetch('https://backend-pharmatrix.onrender.com/api/pharmatrix/sign-in', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: formData?.email,
+          password: formData?.password
+        })
+      });
 
-      if (error) {
-        // Check if it's a network/infrastructure error
-        if (error?.message?.includes('Failed to fetch') || 
-            error?.message?.includes('AuthRetryableFetchError') ||
-            error?.message?.includes('Network Error')) {
-          setErrors({
-            general: 'Cannot connect to authentication service. Your Supabase project may be paused or inactive. Please check your Supabase dashboard and resume your project if needed.'
-          });
-        } else {
-          // Authentication error from Supabase
-          setErrors({
-            general: error?.message || 'Credenciales incorrectas. Por favor, verifica tu correo electrónico y contraseña.'
-          });
-        }
+      const data = await response.json();
+
+      if (!response.ok) {
+        setErrors({
+          general: data.message || 'Credenciales incorrectas. Por favor, verifica tu correo electrónico y contraseña.'
+        });
         return;
       }
 
-      // Successfully authenticated - navigate to dashboard
-      if (data?.user) {
-        navigate('/main-dashboard');
-      }
+      // Guardar datos del usuario en localStorage
+      const userData = {
+        ...data.user,
+        token: data.token,
+        idUser: data.idUser,
+        loginTime: new Date().toISOString(),
+        rememberMe: formData?.rememberMe
+      };
+      
+      localStorage.setItem('pharmatrix_user', JSON.stringify(userData));
+      
+      // Navegar al dashboard
+      navigate('/main-dashboard');
+
     } catch (error) {
-      // JavaScript runtime error (actual code bug)
       if (error?.message?.includes('Failed to fetch') || 
-          error?.message?.includes('NetworkError') ||
-          error?.name === 'TypeError' && error?.message?.includes('fetch')) {
+          error?.message?.includes('NetworkError')) {
         setErrors({
-          general: 'Cannot connect to authentication service. Your Supabase project may be paused or deleted. Please visit your Supabase dashboard to check project status.'
+          general: 'Error de conexión con el servidor. Por favor, verifica tu conexión a internet.'
         });
       } else {
         setErrors({
           general: 'Error de conexión. Por favor, inténtalo de nuevo.'
         });
-        console.error('JavaScript error in auth:', error);
+        console.error('Error en autenticación:', error);
       }
     } finally {
       setIsLoading(false);
@@ -124,8 +119,8 @@ const LoginForm = () => {
       <div className="bg-card rounded-lg shadow-lg border border-border p-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16  rounded-full flex items-center justify-center mx-auto mb-4">
-            <img src={pharmadel} alt="" />
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <img src={pharmadel} alt="Pharmatrix Logo" />
           </div>
           <h1 className="text-2xl font-semibold text-foreground mb-2">
             Iniciar Sesión
@@ -213,18 +208,21 @@ const LoginForm = () => {
           </Button>
         </form>
 
-        {/* Demo Credentials Info - Now shows Supabase credentials */}
-        <div className="mt-8 p-4 bg-muted rounded-lg">
-          <p className="text-xs text-muted-foreground text-center mb-2">
-            Credenciales de demostración (Supabase):
-          </p>
-          <div className="text-xs text-muted-foreground space-y-1">
-            <div>Admin: admin@pharmatrace.com / Admin123!</div>
-            <div>Production: production@pharmatrace.com / Prod123!</div>
-            <div>Quality: quality@pharmatrace.com / Quality123!</div>
-            <div>Operator: operator@pharmatrace.com / Operator123!</div>
+        {/* Switch to Register */}
+        {onSwitchToRegister && (
+          <div className="mt-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              ¿No tienes una cuenta?{' '}
+              <button
+                type="button"
+                onClick={onSwitchToRegister}
+                className="text-primary hover:text-primary/80 font-medium transition-colors duration-200"
+              >
+                Regístrate aquí
+              </button>
+            </p>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

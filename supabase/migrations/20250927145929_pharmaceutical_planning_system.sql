@@ -1,16 +1,14 @@
--- Location: supabase/migrations/20250927145929_pharmaceutical_planning_system.sql
--- Schema Analysis: Fresh project - no existing tables
--- Integration Type: New complete pharmaceutical planning system
--- Dependencies: Creating complete auth + planning module
+-- Ubicación: supabase/migrations/20250927145929_pharmaceutical_planning_system.sql
+-- Sistema completo de planificación farmacéutica - VERSIÓN CORREGIDA SIN TRIGGER DUPLICADO
 
--- 1. Extensions & Custom Types
+-- 1. Extensiones y Tipos Personalizados
 CREATE TYPE public.user_role AS ENUM ('admin', 'production_manager', 'quality_manager', 'operator', 'auditor');
 CREATE TYPE public.lot_status AS ENUM ('planned', 'in_progress', 'completed', 'cancelled', 'on_hold');
 CREATE TYPE public.lot_priority AS ENUM ('low', 'medium', 'high', 'urgent');
 CREATE TYPE public.resource_type AS ENUM ('equipment', 'personnel', 'material');
 CREATE TYPE public.event_type AS ENUM ('lot_emission', 'maintenance', 'training', 'audit');
 
--- 2. Core User Management Table (PostgREST Compatibility)
+-- 2. Tabla Principal de Gestión de Usuarios (Compatibilidad con PostgREST)
 CREATE TABLE public.user_profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT NOT NULL UNIQUE,
@@ -23,20 +21,42 @@ CREATE TABLE public.user_profiles (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3. Products and Formulations
-CREATE TABLE public.products (
+-- 3. Tabla Unificada de Planificación Farmacéutica
+CREATE TABLE public.planificacionFarma (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    product_code TEXT NOT NULL UNIQUE,
-    product_name TEXT NOT NULL,
-    description TEXT,
-    batch_size DECIMAL(10,2) NOT NULL,
-    production_time_hours INTEGER NOT NULL,
-    created_by UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    codigo_producto TEXT NOT NULL UNIQUE,
+    nombre_producto TEXT NOT NULL,
+    descripcion TEXT,
+    area_produccion TEXT CHECK (area_produccion IN ('solido', 'liquido', 'semisolido', 'otros')),
+    numero_lote TEXT,
+    numero_orden TEXT,
+    distribucion TEXT CHECK (distribucion IN ('comercial', 'muestra_medica', 'comercial_1', 'institucional', 'otros')),
+    lote_planificado_inicio TIMESTAMPTZ,
+    lote_planificado_fin TIMESTAMPTZ,
+    lote_real_inicio TIMESTAMPTZ,
+    lote_real_fin TIMESTAMPTZ,
+    tamano_lote DECIMAL(10,2) NOT NULL,
+    cantidad_producida DECIMAL(10,2),
+    tiempo_produccion_horas INTEGER NOT NULL,
+    estado_general public.lot_status DEFAULT 'planned'::public.lot_status,
+    prioridad public.lot_priority DEFAULT 'medium'::public.lot_priority,
+    fase_preproduccion TEXT CHECK (fase_preproduccion IN ('emitido', 'aprobado', 'pesado', 'descargado', 'pendiente')),
+    fase_fabricacion TEXT,
+    estado_materia_prima TEXT CHECK (estado_materia_prima IN ('confirmado', 'pendiente', 'parcial', 'rechazado')),
+    estado_material_empaque TEXT CHECK (estado_material_empaque IN ('confirmado', 'pendiente', 'parcial', 'rechazado')),
+    desviaciones JSONB DEFAULT '[]'::JSONB,
+    reprocesos JSONB DEFAULT '[]'::JSONB,
+    retrabajos JSONB DEFAULT '[]'::JSONB,
+    asignado_a UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
+    creado_por UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
+    notas TEXT,
+    observaciones TEXT,
+    creado_en TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    version INTEGER DEFAULT 1
 );
 
--- 4. Production Resources
+-- 4. Recursos de Producción
 CREATE TABLE public.resources (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     resource_code TEXT NOT NULL UNIQUE,
@@ -48,37 +68,18 @@ CREATE TABLE public.resources (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 5. Main Planning Calendar - Lot Emissions
-CREATE TABLE public.lot_schedules (
+-- 5. Asignaciones de Recursos para Planificación
+CREATE TABLE public.asignaciones_recursos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    lot_number TEXT NOT NULL UNIQUE,
-    product_id UUID REFERENCES public.products(id) ON DELETE CASCADE,
-    scheduled_start TIMESTAMPTZ NOT NULL,
-    scheduled_end TIMESTAMPTZ NOT NULL,
-    actual_start TIMESTAMPTZ,
-    actual_end TIMESTAMPTZ,
-    status public.lot_status DEFAULT 'planned'::public.lot_status,
-    priority public.lot_priority DEFAULT 'medium'::public.lot_priority,
-    batch_quantity DECIMAL(10,2) NOT NULL,
-    assigned_to UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
-    created_by UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
-    notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    planificacion_id UUID REFERENCES public.planificacionFarma(id) ON DELETE CASCADE,
+    recurso_id UUID REFERENCES public.resources(id) ON DELETE CASCADE,
+    asignado_desde TIMESTAMPTZ NOT NULL,
+    asignado_hasta TIMESTAMPTZ NOT NULL,
+    creado_en TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(recurso_id, asignado_desde, asignado_hasta)
 );
 
--- 6. Resource Assignments for Lots
-CREATE TABLE public.lot_resource_assignments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    lot_schedule_id UUID REFERENCES public.lot_schedules(id) ON DELETE CASCADE,
-    resource_id UUID REFERENCES public.resources(id) ON DELETE CASCADE,
-    assigned_from TIMESTAMPTZ NOT NULL,
-    assigned_until TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(resource_id, assigned_from, assigned_until)
-);
-
--- 7. Calendar Events (includes maintenance, training, audits)
+-- 6. Eventos del Calendario (incluye mantenimiento, capacitación, auditorías)
 CREATE TABLE public.calendar_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT NOT NULL,
@@ -87,8 +88,8 @@ CREATE TABLE public.calendar_events (
     start_time TIMESTAMPTZ NOT NULL,
     end_time TIMESTAMPTZ NOT NULL,
     all_day BOOLEAN DEFAULT false,
-    recurring_rule TEXT, -- RRULE for recurring events
-    lot_schedule_id UUID REFERENCES public.lot_schedules(id) ON DELETE CASCADE,
+    recurring_rule TEXT,
+    planificacion_id UUID REFERENCES public.planificacionFarma(id) ON DELETE CASCADE,
     created_by UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
     assigned_to UUID[] DEFAULT ARRAY[]::UUID[],
     location TEXT,
@@ -97,185 +98,169 @@ CREATE TABLE public.calendar_events (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 8. Essential Indexes
+-- 7. Índices Esenciales
 CREATE INDEX idx_user_profiles_email ON public.user_profiles(email);
 CREATE INDEX idx_user_profiles_role ON public.user_profiles(role);
-CREATE INDEX idx_products_product_code ON public.products(product_code);
+CREATE INDEX idx_planificacionFarma_codigo_producto ON public.planificacionFarma(codigo_producto);
+CREATE INDEX idx_planificacionFarma_numero_lote ON public.planificacionFarma(numero_lote);
+CREATE INDEX idx_planificacionFarma_numero_orden ON public.planificacionFarma(numero_orden);
+CREATE INDEX idx_planificacionFarma_estado ON public.planificacionFarma(estado_general);
+CREATE INDEX idx_planificacionFarma_fase_fabricacion ON public.planificacionFarma(fase_fabricacion);
+CREATE INDEX idx_planificacionFarma_fechas ON public.planificacionFarma(lote_planificado_inicio, lote_planificado_fin);
+CREATE INDEX idx_planificacionFarma_asignado_a ON public.planificacionFarma(asignado_a);
 CREATE INDEX idx_resources_type ON public.resources(resource_type);
-CREATE INDEX idx_lot_schedules_product_id ON public.lot_schedules(product_id);
-CREATE INDEX idx_lot_schedules_status ON public.lot_schedules(status);
-CREATE INDEX idx_lot_schedules_dates ON public.lot_schedules(scheduled_start, scheduled_end);
-CREATE INDEX idx_lot_schedules_assigned_to ON public.lot_schedules(assigned_to);
-CREATE INDEX idx_lot_resource_assignments_lot_id ON public.lot_resource_assignments(lot_schedule_id);
-CREATE INDEX idx_lot_resource_assignments_resource_id ON public.lot_resource_assignments(resource_id);
+CREATE INDEX idx_asignaciones_recursos_planificacion_id ON public.asignaciones_recursos(planificacion_id);
+CREATE INDEX idx_asignaciones_recursos_recurso_id ON public.asignaciones_recursos(recurso_id);
 CREATE INDEX idx_calendar_events_time_range ON public.calendar_events(start_time, end_time);
 CREATE INDEX idx_calendar_events_type ON public.calendar_events(event_type);
 CREATE INDEX idx_calendar_events_created_by ON public.calendar_events(created_by);
 
--- 9. Helper Functions (BEFORE RLS Policies)
+-- 8. Funciones Auxiliares (ANTES de las Políticas RLS)
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
-RETURNS TRIGGER
-SECURITY DEFINER
-LANGUAGE plpgsql AS $$
+RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
     RETURN NEW;
 END;
-$$;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.actualizar_timestamp_actualizacion()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.actualizado_en = CURRENT_TIMESTAMP;
+    NEW.version = COALESCE(OLD.version, 0) + 1;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION public.can_manage_lots(user_uuid UUID)
-RETURNS BOOLEAN
-LANGUAGE sql
-STABLE
-SECURITY DEFINER AS $$
+RETURNS BOOLEAN AS $$
 SELECT EXISTS (
     SELECT 1 FROM public.user_profiles up
     WHERE up.id = user_uuid 
     AND up.role IN ('admin', 'production_manager', 'quality_manager')
     AND up.is_active = true
 )
-$$;
+$$ LANGUAGE sql STABLE;
 
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER
-SECURITY DEFINER
-LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION public.validar_flujo_estados()
+RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO public.user_profiles (id, email, full_name, role)
-    VALUES (
-        NEW.id,
-        NEW.email,
-        COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-        COALESCE(NEW.raw_user_meta_data->>'role', 'operator')::public.user_role
-    );
+    IF NEW.fase_preproduccion = 'emitido' AND OLD.fase_preproduccion IS NULL THEN
+        RETURN NEW;
+    END IF;
+    
+    IF NEW.fase_preproduccion != OLD.fase_preproduccion THEN
+        CASE OLD.fase_preproduccion
+            WHEN 'emitido' THEN
+                IF NEW.fase_preproduccion NOT IN ('aprobado', 'pendiente') THEN
+                    RAISE EXCEPTION 'Transición de fase inválida: de emitido solo se puede ir a aprobado o pendiente';
+                END IF;
+            WHEN 'aprobado' THEN
+                IF NEW.fase_preproduccion NOT IN ('pesado', 'pendiente') THEN
+                    RAISE EXCEPTION 'Transición de fase inválida: de aprobado solo se puede ir a pesado o pendiente';
+                END IF;
+            WHEN 'pesado' THEN
+                IF NEW.fase_preproduccion NOT IN ('descargado', 'pendiente') THEN
+                    RAISE EXCEPTION 'Transición de fase inválida: de pesado solo se puede ir a descargado o pendiente';
+                END IF;
+        END CASE;
+    END IF;
+    
     RETURN NEW;
 END;
-$$;
+$$ LANGUAGE plpgsql;
 
--- 10. Enable RLS
+CREATE OR REPLACE FUNCTION public.generar_numero_lote()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.numero_lote IS NULL AND NEW.codigo_producto IS NOT NULL THEN
+        NEW.numero_lote := UPPER(SUBSTRING(NEW.codigo_producto FROM 1 FOR 3)) || 
+                          '-' || 
+                          TO_CHAR(CURRENT_DATE, 'YYMMDD') ||
+                          '-' ||
+                          LPAD((SELECT COALESCE(COUNT(*), 0) + 1 
+                                FROM public.planificacionFarma 
+                                WHERE DATE(creado_en) = CURRENT_DATE)::TEXT, 3, '0');
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 9. Habilitar RLS (Row Level Security)
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.planificacionFarma ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.resources ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.lot_schedules ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.lot_resource_assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.asignaciones_recursos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calendar_events ENABLE ROW LEVEL SECURITY;
 
--- 11. RLS Policies (Using Pattern 1 & 2 from guidelines)
+-- 10. Políticas RLS
+CREATE POLICY "users_manage_own_user_profiles" ON public.user_profiles
+FOR ALL TO authenticated USING (id = auth.uid()) WITH CHECK (id = auth.uid());
 
--- Pattern 1: Core user table - Simple only, no functions
-CREATE POLICY "users_manage_own_user_profiles"
-ON public.user_profiles
-FOR ALL
-TO authenticated
-USING (id = auth.uid())
-WITH CHECK (id = auth.uid());
+CREATE POLICY "usuarios_pueden_leer_planificacionFarma" ON public.planificacionFarma
+FOR SELECT TO authenticated USING (true);
 
--- Pattern 2: Simple user ownership for products
-CREATE POLICY "authenticated_users_can_read_products"
-ON public.products
-FOR SELECT
-TO authenticated
-USING (true);
+CREATE POLICY "usuarios_pueden_gestionar_propia_planificacionFarma" ON public.planificacionFarma
+FOR ALL TO authenticated 
+USING (creado_por = auth.uid() OR asignado_a = auth.uid() OR public.can_manage_lots(auth.uid()))
+WITH CHECK (creado_por = auth.uid() OR public.can_manage_lots(auth.uid()));
 
-CREATE POLICY "managers_can_manage_products"
-ON public.products
-FOR ALL
-TO authenticated
-USING (public.can_manage_lots(auth.uid()))
-WITH CHECK (public.can_manage_lots(auth.uid()));
+CREATE POLICY "authenticated_users_can_read_resources" ON public.resources
+FOR SELECT TO authenticated USING (true);
 
--- Pattern 4: Public read for resources, manager write
-CREATE POLICY "authenticated_users_can_read_resources"
-ON public.resources
-FOR SELECT
-TO authenticated
-USING (true);
+CREATE POLICY "managers_can_manage_resources" ON public.resources
+FOR ALL TO authenticated USING (public.can_manage_lots(auth.uid())) WITH CHECK (public.can_manage_lots(auth.uid()));
 
-CREATE POLICY "managers_can_manage_resources"
-ON public.resources
-FOR ALL
-TO authenticated
-USING (public.can_manage_lots(auth.uid()))
-WITH CHECK (public.can_manage_lots(auth.uid()));
+CREATE POLICY "usuarios_pueden_leer_asignaciones_recursos" ON public.asignaciones_recursos
+FOR SELECT TO authenticated USING (true);
 
--- Pattern 2: Simple ownership for lot schedules
-CREATE POLICY "users_can_read_lot_schedules"
-ON public.lot_schedules
-FOR SELECT
-TO authenticated
-USING (true);
+CREATE POLICY "gerentes_pueden_gestionar_asignaciones_recursos" ON public.asignaciones_recursos
+FOR ALL TO authenticated USING (public.can_manage_lots(auth.uid())) WITH CHECK (public.can_manage_lots(auth.uid()));
 
-CREATE POLICY "users_can_manage_own_lot_schedules"
-ON public.lot_schedules
-FOR ALL
-TO authenticated
-USING (created_by = auth.uid() OR assigned_to = auth.uid() OR public.can_manage_lots(auth.uid()))
-WITH CHECK (created_by = auth.uid() OR public.can_manage_lots(auth.uid()));
+CREATE POLICY "users_can_read_calendar_events" ON public.calendar_events
+FOR SELECT TO authenticated USING (true);
 
--- Resource assignments follow lot schedule permissions
-CREATE POLICY "users_can_read_lot_resource_assignments"
-ON public.lot_resource_assignments
-FOR SELECT
-TO authenticated
-USING (true);
-
-CREATE POLICY "managers_can_manage_lot_resource_assignments"
-ON public.lot_resource_assignments
-FOR ALL
-TO authenticated
-USING (public.can_manage_lots(auth.uid()))
-WITH CHECK (public.can_manage_lots(auth.uid()));
-
--- Calendar events - users can see all, manage own
-CREATE POLICY "users_can_read_calendar_events"
-ON public.calendar_events
-FOR SELECT
-TO authenticated
-USING (true);
-
-CREATE POLICY "users_can_manage_own_calendar_events"
-ON public.calendar_events
-FOR ALL
-TO authenticated
+CREATE POLICY "users_can_manage_own_calendar_events" ON public.calendar_events
+FOR ALL TO authenticated 
 USING (created_by = auth.uid() OR auth.uid() = ANY(assigned_to) OR public.can_manage_lots(auth.uid()))
 WITH CHECK (created_by = auth.uid() OR public.can_manage_lots(auth.uid()));
 
--- 12. Triggers
-CREATE TRIGGER on_auth_user_created
-    AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
+-- 11. Triggers (SOLO los que no existen - ELIMINADO el trigger duplicado)
 CREATE TRIGGER update_user_profiles_updated_at
     BEFORE UPDATE ON public.user_profiles
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-CREATE TRIGGER update_products_updated_at
-    BEFORE UPDATE ON public.products
-    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER actualizar_planificacionFarma_timestamp
+    BEFORE UPDATE ON public.planificacionFarma
+    FOR EACH ROW EXECUTE FUNCTION public.actualizar_timestamp_actualizacion();
 
-CREATE TRIGGER update_lot_schedules_updated_at
-    BEFORE UPDATE ON public.lot_schedules
-    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER validar_estados_planificacionFarma
+    BEFORE UPDATE ON public.planificacionFarma
+    FOR EACH ROW EXECUTE FUNCTION public.validar_flujo_estados();
+
+CREATE TRIGGER generar_lote_planificacionFarma
+    BEFORE INSERT ON public.planificacionFarma
+    FOR EACH ROW EXECUTE FUNCTION public.generar_numero_lote();
 
 CREATE TRIGGER update_calendar_events_updated_at
     BEFORE UPDATE ON public.calendar_events
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
--- 13. Mock Data with Complete Auth Users
+-- 12. Datos de Prueba con Usuarios de Auth Completos
 DO $$
 DECLARE
     admin_uuid UUID := gen_random_uuid();
     production_mgr_uuid UUID := gen_random_uuid();
     quality_mgr_uuid UUID := gen_random_uuid();
     operator_uuid UUID := gen_random_uuid();
-    product1_uuid UUID := gen_random_uuid();
-    product2_uuid UUID := gen_random_uuid();
     resource1_uuid UUID := gen_random_uuid();
     resource2_uuid UUID := gen_random_uuid();
-    lot1_uuid UUID := gen_random_uuid();
-    lot2_uuid UUID := gen_random_uuid();
+    planificacion1_uuid UUID := gen_random_uuid();
+    planificacion2_uuid UUID := gen_random_uuid();
+    planificacion3_uuid UUID := gen_random_uuid();
 BEGIN
-    -- Create auth users with required fields
+    -- Crear usuarios de auth con campos requeridos
     INSERT INTO auth.users (
         id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
         created_at, updated_at, raw_user_meta_data, raw_app_meta_data,
@@ -306,73 +291,97 @@ BEGIN
          '{"provider": "email", "providers": ["email"]}'::jsonb,
          false, false, '', null, '', null, '', '', null, '', 0, '', null, null, '', '', null);
 
-    -- Create products
-    INSERT INTO public.products (id, product_code, product_name, description, batch_size, production_time_hours, created_by) VALUES
-        (product1_uuid, 'ASPIRIN-500', 'Aspirina 500mg', 'Tabletas de aspirina 500mg para dolor y fiebre', 10000.00, 8, production_mgr_uuid),
-        (product2_uuid, 'IBUPROFEN-400', 'Ibuprofeno 400mg', 'Capsulas de ibuprofeno 400mg antiinflamatorio', 5000.00, 6, production_mgr_uuid);
-
-    -- Create resources
+    -- Crear recursos
     INSERT INTO public.resources (id, resource_code, resource_name, resource_type, capacity, description) VALUES
-        (resource1_uuid, 'LINE-01', 'Linea de Produccion 1', 'equipment'::public.resource_type, 1, 'Linea principal para tabletas'),
-        (resource2_uuid, 'TEAM-A', 'Equipo de Produccion A', 'personnel'::public.resource_type, 5, 'Equipo especializado en tabletas');
+        (resource1_uuid, 'LINE-01', 'Linea de Produccion 1', 'equipment', 1, 'Linea principal para tabletas'),
+        (resource2_uuid, 'TEAM-A', 'Equipo de Produccion A', 'personnel', 5, 'Equipo especializado en tabletas');
 
-    -- Create lot schedules
-    INSERT INTO public.lot_schedules (
-        id, lot_number, product_id, scheduled_start, scheduled_end, 
-        status, priority, batch_quantity, assigned_to, created_by, notes
+    -- Crear planificaciones farmacéuticas
+    INSERT INTO public.planificacionFarma (
+        id, codigo_producto, nombre_producto, descripcion, area_produccion, distribucion,
+        tamano_lote, tiempo_produccion_horas, fase_preproduccion, fase_fabricacion,
+        estado_materia_prima, estado_material_empaque, lote_planificado_inicio, lote_planificado_fin,
+        prioridad, asignado_a, creado_por, notas
     ) VALUES
-        (lot1_uuid, 'LOT-ASP-001', product1_uuid, 
+        (planificacion1_uuid, 'ASPIRIN-500', 'Aspirina 500mg', 'Tabletas de aspirina 500mg para dolor y fiebre', 
+         'solido', 'comercial', 10000.00, 8, 'emitido', 'Mezcla inicial',
+         'confirmado', 'pendiente', 
          CURRENT_DATE + INTERVAL '1 day' + TIME '08:00:00',
          CURRENT_DATE + INTERVAL '1 day' + TIME '16:00:00',
-         'planned'::public.lot_status, 'high'::public.lot_priority, 10000.00,
-         operator_uuid, production_mgr_uuid, 'Lote prioritario para pedido urgente'),
-        (lot2_uuid, 'LOT-IBU-001', product2_uuid,
+         'high', operator_uuid, production_mgr_uuid, 'Lote prioritario para pedido urgente'),
+         
+        (planificacion2_uuid, 'IBUPROFEN-400', 'Ibuprofeno 400mg', 'Cápsulas de ibuprofeno 400mg antiinflamatorio', 
+         'solido', 'institucional', 5000.00, 6, 'aprobado', 'Granulación',
+         'confirmado', 'confirmado',
          CURRENT_DATE + INTERVAL '2 days' + TIME '08:00:00',
          CURRENT_DATE + INTERVAL '2 days' + TIME '14:00:00',
-         'planned'::public.lot_status, 'medium'::public.lot_priority, 5000.00,
-         operator_uuid, production_mgr_uuid, 'Produccion regular de ibuprofeno');
+         'medium', operator_uuid, production_mgr_uuid, 'Produccion regular de ibuprofeno'),
+         
+        (planificacion3_uuid, 'JARABE-TOS', 'Jarabe para la Tos', 'Jarabe expectorante 100ml',
+         'liquido', 'comercial_1', 2000.00, 4, 'pesado', 'Disolución',
+         'parcial', 'pendiente',
+         CURRENT_DATE + INTERVAL '3 days' + TIME '10:00:00',
+         CURRENT_DATE + INTERVAL '3 days' + TIME '14:00:00',
+         'low', operator_uuid, production_mgr_uuid, 'Producción de jarabe para temporada');
 
-    -- Assign resources to lots
-    INSERT INTO public.lot_resource_assignments (lot_schedule_id, resource_id, assigned_from, assigned_until) VALUES
-        (lot1_uuid, resource1_uuid, 
+    -- Asignar recursos a planificaciones
+    INSERT INTO public.asignaciones_recursos (planificacion_id, recurso_id, asignado_desde, asignado_hasta) VALUES
+        (planificacion1_uuid, resource1_uuid, 
          CURRENT_DATE + INTERVAL '1 day' + TIME '08:00:00',
          CURRENT_DATE + INTERVAL '1 day' + TIME '16:00:00'),
-        (lot1_uuid, resource2_uuid,
+        (planificacion1_uuid, resource2_uuid,
          CURRENT_DATE + INTERVAL '1 day' + TIME '08:00:00',
          CURRENT_DATE + INTERVAL '1 day' + TIME '16:00:00'),
-        (lot2_uuid, resource1_uuid,
+        (planificacion2_uuid, resource1_uuid,
          CURRENT_DATE + INTERVAL '2 days' + TIME '08:00:00',
-         CURRENT_DATE + INTERVAL '2 days' + TIME '14:00:00');
+         CURRENT_DATE + INTERVAL '2 days' + TIME '14:00:00'),
+        (planificacion3_uuid, resource1_uuid,
+         CURRENT_DATE + INTERVAL '3 days' + TIME '10:00:00',
+         CURRENT_DATE + INTERVAL '3 days' + TIME '14:00:00');
 
-    -- Create calendar events
+    -- Crear eventos del calendario
     INSERT INTO public.calendar_events (
         title, description, event_type, start_time, end_time, 
-        lot_schedule_id, created_by, location, color
+        planificacion_id, created_by, location, color
     ) VALUES
-        ('Produccion Aspirina 500mg - LOT-ASP-001', 
-         'Emision del lote ASP-001 - Aspirina 500mg (10,000 unidades)',
-         'lot_emission'::public.event_type,
+        ('Produccion Aspirina 500mg', 
+         'Emision del lote - Aspirina 500mg (10,000 unidades)',
+         'lot_emission',
          CURRENT_DATE + INTERVAL '1 day' + TIME '08:00:00',
          CURRENT_DATE + INTERVAL '1 day' + TIME '16:00:00',
-         lot1_uuid, production_mgr_uuid, 'Planta - Linea 1', '#EF4444'),
-        ('Produccion Ibuprofeno 400mg - LOT-IBU-001',
-         'Emision del lote IBU-001 - Ibuprofeno 400mg (5,000 unidades)',
-         'lot_emission'::public.event_type,
+         planificacion1_uuid, production_mgr_uuid, 'Planta - Linea 1', '#EF4444'),
+        ('Produccion Ibuprofeno 400mg',
+         'Emision del lote - Ibuprofeno 400mg (5,000 unidades)',
+         'lot_emission',
          CURRENT_DATE + INTERVAL '2 days' + TIME '08:00:00',
          CURRENT_DATE + INTERVAL '2 days' + TIME '14:00:00',
-         lot2_uuid, production_mgr_uuid, 'Planta - Linea 1', '#3B82F6'),
+         planificacion2_uuid, production_mgr_uuid, 'Planta - Linea 1', '#3B82F6'),
+        ('Produccion Jarabe para la Tos',
+         'Producción de jarabe expectorante 100ml (2,000 unidades)',
+         'lot_emission',
+         CURRENT_DATE + INTERVAL '3 days' + TIME '10:00:00',
+         CURRENT_DATE + INTERVAL '3 days' + TIME '14:00:00',
+         planificacion3_uuid, production_mgr_uuid, 'Planta - Area Liquidos', '#10B981'),
         ('Mantenimiento Preventivo Linea 1',
          'Mantenimiento programado de la linea de produccion 1',
-         'maintenance'::public.event_type,
+         'maintenance',
          CURRENT_DATE + INTERVAL '3 days' + TIME '18:00:00',
          CURRENT_DATE + INTERVAL '3 days' + TIME '22:00:00',
          NULL, admin_uuid, 'Planta - Linea 1', '#F59E0B');
 
 EXCEPTION
     WHEN foreign_key_violation THEN
-        RAISE NOTICE 'Foreign key error: %', SQLERRM;
+        RAISE NOTICE 'Error de clave foránea: %', SQLERRM;
     WHEN unique_violation THEN
-        RAISE NOTICE 'Unique constraint error: %', SQLERRM;
+        RAISE NOTICE 'Error de restricción única: %', SQLERRM;
     WHEN OTHERS THEN
-        RAISE NOTICE 'Unexpected error: %', SQLERRM;
+        RAISE NOTICE 'Error inesperado: %', SQLERRM;
 END $$;
+
+-- Comentarios descriptivos para documentación
+COMMENT ON TABLE public.planificacionFarma IS 'Tabla unificada para la planificación farmacéutica que combina productos y programación de lotes';
+COMMENT ON COLUMN public.planificacionFarma.fase_preproduccion IS 'Fase antes de producción: emitido, aprobado, pesado, descargado';
+COMMENT ON COLUMN public.planificacionFarma.fase_fabricacion IS 'Fase actual de fabricación del producto (texto libre)';
+COMMENT ON COLUMN public.planificacionFarma.desviaciones IS 'Array de IDs de reportes de desviaciones en formato JSON';
+COMMENT ON COLUMN public.planificacionFarma.reprocesos IS 'Array de IDs de reportes de reproceso en formato JSON';
+COMMENT ON COLUMN public.planificacionFarma.retrabajos IS 'Array de IDs de reportes de retrabajo en formato JSON';

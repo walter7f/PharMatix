@@ -1,15 +1,17 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LoginForm from './components/LoginForm';
+import RegisterForm from './components/RegisterForm';
 import BackgroundPattern from './components/BackgroundPattern';
-import logo from '../../images/logo.jpg'
+import logo from '../../images/logo.jpg';
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const [showRegister, setShowRegister] = useState(false);
 
   useEffect(() => {
-    // Check if user is already logged in
-    const userData = localStorage.getItem('pharmaTrace_user');
+    // Verificar si el usuario ya está autenticado
+    const userData = localStorage.getItem('pharmatrix_user');
     if (userData) {
       try {
         const user = JSON.parse(userData);
@@ -18,29 +20,30 @@ const LoginPage = () => {
         const timeDifference = currentTime - loginTime;
         const hoursElapsed = timeDifference / (1000 * 60 * 60);
 
-        // Check if session is still valid (24 hours for remember me, 8 hours otherwise)
+        // Verificar si la sesión sigue válida (24 horas para remember me, 8 horas sin remember me)
         const sessionDuration = user?.rememberMe ? 24 : 8;
         
         if (hoursElapsed < sessionDuration) {
           navigate('/main-dashboard');
         } else {
-          // Session expired, clear storage
-          localStorage.removeItem('pharmaTrace_user');
+          // Sesión expirada, limpiar storage
+          localStorage.removeItem('pharmatrix_user');
         }
       } catch (error) {
-        // Invalid user data, clear storage
-        localStorage.removeItem('pharmaTrace_user');
+        // Datos de usuario inválidos, limpiar storage
+        localStorage.removeItem('pharmatrix_user');
       }
     }
 
-    // Set page title
-    document.title = 'Iniciar Sesión - PharmaTrace Pro';
+    // Establecer título de la página
+    document.title = 'Iniciar Sesión - Pharmatrix';
   }, [navigate]);
 
   return (
     <div className="min-h-screen bg-background relative">
       {/* Background Pattern */}
       <BackgroundPattern />
+      
       {/* Main Content */}
       <div className="relative z-10 min-h-screen flex flex-col">
         {/* Header */}
@@ -48,21 +51,21 @@ const LoginPage = () => {
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                  <div className="flex items-center gap-4">
-                    <img src={logo} alt="Logo" style={{ width: '50px', height: '50px' }}/>
-                    <div>
-                      <h1 className="text-xl font-semibold text-foreground">Phamatrix</h1>
-                      <p className="text-sm text-muted-foreground">
-                        Sistema de Gestión y Trazabilidad Farmacéutica
-                      </p>
-                    </div>
+                <div className="flex items-center gap-4">
+                  <img src={logo} alt="Logo" style={{ width: '50px', height: '50px' }}/>
+                  <div>
+                    <h1 className="text-xl font-semibold text-foreground">Pharmatrix</h1>
+                    <p className="text-sm text-muted-foreground">
+                      Sistema de Gestión y Trazabilidad Farmacéutica
+                    </p>
                   </div>
+                </div>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Main Login Section */}
+        {/* Main Login/Register Section */}
         <main className="flex-1 flex items-center justify-center px-4 py-8">
           <div className="w-full max-w-6xl mx-auto">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
@@ -73,8 +76,8 @@ const LoginPage = () => {
                   <h2 className="text-4xl font-bold text-foreground mb-4">
                     Pharmatrix
                   </h2>
-                  </div>
-                  <div>
+                </div>
+                <div>
                   <p className="text-lg text-muted-foreground leading-relaxed mb-6">
                     Tu plataforma integral para la gestión de calidad farmacéutica, 
                     trazabilidad de producción y cumplimiento regulatorio.
@@ -126,9 +129,13 @@ const LoginPage = () => {
                 </div>
               </div>
 
-              {/* Right Side - Login Form */}
+              {/* Right Side - Login or Register Form */}
               <div className="w-full">
-                <LoginForm />
+                {showRegister ? (
+                  <RegisterForm onSwitchToLogin={() => setShowRegister(false)} />
+                ) : (
+                  <LoginForm onSwitchToRegister={() => setShowRegister(true)} />
+                )}
               </div>
             </div>
           </div>
@@ -153,7 +160,7 @@ const LoginPage = () => {
               <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                 <span>Soporte 24/7:</span>
                 <a 
-                  href="mailto:soporte@pharmatrace.com"
+                  href="mailto:walter13457@gmail.com"
                   className="text-primary hover:text-primary/80 transition-colors duration-200"
                 >
                   walter13457@gmail.com

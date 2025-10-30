@@ -50,7 +50,8 @@ const Sidebar = ({ collapsed, onToggle, currentPath }) => {
   const handleSignOut = async () => {
     const { error } = await signOut();
     if (!error) {
-      window.location.href = '/login';
+       localStorage.clear();
+      window.location.href = '/';
     }
   };
 
