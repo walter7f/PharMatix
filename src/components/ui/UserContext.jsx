@@ -2,13 +2,37 @@ import React, { useState, useEffect } from 'react';
 import Icon from '../AppIcon';
 
 const UserContext = ({ isCollapsed = false }) => {
-  const [user, setUser] = useState({
-    name: localStorage.getItem('nameUser') || 'Usuario',
-    role: localStorage.getItem('puestoUser') || 'Rol no definido',
-    initials: (localStorage.getItem('nameUser') || 'US').substring(0, 2).toUpperCase(),
-    sessionStatus: 'active',
-    lastActivity: new Date()
-  });
+  // Función para obtener datos del localStorage
+  const getUserData = () => {
+    try {
+      const userData = localStorage.getItem('harmatrix_user');
+      if (userData) {
+        const parsedData = JSON.parse(userData);
+        return {
+          name: parsedData.nameUser || 'Usuario',
+          role: parsedData.puestoUser || 'Rol no definido',
+          initials: (parsedData.nameUser || 'US').substring(0, 2).toUpperCase(),
+          sessionStatus: 'active',
+          lastActivity: new Date()
+        };
+      }
+    } catch (error) {
+      console.error('Error parsing user data:', error);
+    }
+    
+    // Valores por defecto si no hay datos
+    return {
+      name: 'Usuario',
+      role: 'Rol no definido',
+      initials: 'US',
+      sessionStatus: 'active',
+      lastActivity: new Date()
+    };
+  };
+
+  const [user, setUser] = useState(getUserData());
+
+  // Resto del componente...
   
   const [showDropdown, setShowDropdown] = useState(false);
   const [sessionTimeLeft, setSessionTimeLeft] = useState(1800); // 30 minutes in seconds
