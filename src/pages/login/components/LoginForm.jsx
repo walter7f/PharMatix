@@ -84,6 +84,8 @@ const LoginForm = ({ onSwitchToRegister }) => {
         ...data.user,
         token: data.token,
         idUser: data.idUser,
+        nameUser:data.nameUser,
+        puestoUser:data.puestoUser,
         loginTime: new Date().toISOString(),
         rememberMe: formData?.rememberMe
       };

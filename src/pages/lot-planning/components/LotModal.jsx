@@ -1,5 +1,3 @@
-
-// LotModal.jsx - Componente Modal para Pharmatrix
 import React, { useState, useEffect } from 'react';
 
 const LotModal = ({ isOpen, onClose, editingLot, onSaved }) => {

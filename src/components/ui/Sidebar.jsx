@@ -124,10 +124,10 @@ const Sidebar = ({ collapsed, onToggle, currentPath }) => {
               {!collapsed && (
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-foreground truncate">
-                    {userProfile?.full_name || user?.email?.split('@')?.[0]}
+                    {localStorage.getItem('nameUser') || userProfile?.full_name || user?.email?.split('@')?.[0]}
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
-                    {userProfile?.role || 'Usuario'}
+                    {localStorage.getItem('puestoUser') || userProfile?.role || 'Usuario'}
                   </div>
                 </div>
               )}

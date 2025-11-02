@@ -3,9 +3,9 @@ import Icon from '../AppIcon';
 
 const UserContext = ({ isCollapsed = false }) => {
   const [user, setUser] = useState({
-    name: 'Dr. Sarah Chen',
-    role: 'Quality Manager',
-    initials: 'SC',
+    name: localStorage.getItem('nameUser') || 'Usuario',
+    role: localStorage.getItem('puestoUser') || 'Rol no definido',
+    initials: (localStorage.getItem('nameUser') || 'US').substring(0, 2).toUpperCase(),
     sessionStatus: 'active',
     lastActivity: new Date()
   });
