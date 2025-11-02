@@ -1,12 +1,9 @@
-import React, { useState, useMemo } from 'react';
-import Button from '../../../components/ui/Button';
-import Icon from '../../../components/AppIcon';
+import React, { useState } from 'react';
 
 const CalendarView = ({ 
   view, 
   currentDate, 
   lotSchedules = [], 
-  calendarEvents = [], 
   onSelectDate,
   onCreateEvent,
   onEditItem
@@ -16,9 +13,7 @@ const CalendarView = ({
   // Get week data (starting on Monday)
   const getWeekData = (date) => {
     const startOfWeek = new Date(date);
-    // Get day of week (0 = Sunday, 1 = Monday, etc.)
     const dayOfWeek = startOfWeek.getDay();
-    // Calculate offset to get to Monday (if Sunday, go back 6 days, otherwise go back dayOfWeek - 1)
     const offset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     startOfWeek.setDate(date.getDate() + offset);
     
@@ -34,30 +29,19 @@ const CalendarView = ({
 
   // Get unique production areas/stations
   const getProductionStations = () => {
-    const stations = new Set();
-    lotSchedules.forEach(lot => {
-      if (lot.production_station) {
-        stations.add(lot.production_station);
-      }
-    });
-    
-    // Default stations if none found
-    if (stations.size === 0) {
-      return [
-        'PREPARACION',
-        'LLENADO LIQUIDOS',
-        'LLENADO SEMISOLIDOS',
-        'GRANULACION',
-        'MEZCLADO',
-        'LLENADO POLVOS',
-        'ENCAPSULADO',
-        'COMPRESION',
-        'RECUBRIMIENTO',
-        'BLISTER'
-      ];
-    }
-    
-    return Array.from(stations).sort();
+    // Siempre retornar todas las estaciones de trabajo
+    return [
+      'PREPARACION',
+      'LLENADO LIQUIDOS',
+      'LLENADO SEMISOLIDOS',
+      'GRANULACION',
+      'MEZCLADO',
+      'LLENADO POLVOS',
+      'ENCAPSULADO',
+      'COMPRESION',
+      'RECUBRIMIENTO',
+      'BLISTER'
+    ];
   };
 
   // Get lots for specific date and station
@@ -65,11 +49,14 @@ const CalendarView = ({
     const dateStr = date.toDateString();
     
     return lotSchedules.filter(lot => {
-      const startDate = new Date(lot.scheduled_start);
-      const endDate = new Date(lot.scheduled_end);
-      const matchesStation = lot.production_station === station;
-      const matchesDate = startDate.toDateString() === dateStr || 
-                         (startDate <= date && endDate >= date);
+      // Si el lote no tiene fecha, usar la fecha actual
+      const lotDate = lot.fecha ? new Date(lot.fecha) : new Date();
+      
+      // Si el lote no tiene estación, asignar PREPARACION por defecto
+      const lotStation = lot.production_station || 'PREPARACION';
+      
+      const matchesStation = lotStation === station;
+      const matchesDate = lotDate.toDateString() === dateStr;
       
       return matchesStation && matchesDate;
     });
@@ -87,17 +74,7 @@ const CalendarView = ({
     return colors[status] || 'bg-gray-100 border-gray-300 text-gray-900';
   };
 
-  const getPriorityBadge = (priority) => {
-    const badges = {
-      urgent: 'bg-red-500 text-white',
-      high: 'bg-orange-500 text-white',
-      medium: 'bg-yellow-500 text-white',
-      low: 'bg-green-500 text-white'
-    };
-    return badges[priority] || 'bg-gray-500 text-white';
-  };
-
-  // Render production grid (like the PDF)
+  // Render production grid
   const renderProductionGrid = () => {
     const weekDays = getWeekData(currentDate);
     const stations = getProductionStations();
@@ -106,7 +83,6 @@ const CalendarView = ({
     return (
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
-          {/* Header with dates */}
           <thead>
             <tr className="bg-primary text-primary-foreground">
               <th className="border border-border p-3 text-left font-semibold sticky left-0 bg-primary z-10 min-w-[180px]">
@@ -138,7 +114,6 @@ const CalendarView = ({
             </tr>
           </thead>
 
-          {/* Body with stations and lots */}
           <tbody>
             {stations.map((station, stationIndex) => (
               <tr key={station} className={stationIndex % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
@@ -157,7 +132,7 @@ const CalendarView = ({
                       }`}
                       onDoubleClick={() => {
                         onCreateEvent?.({
-                          start_time: date.toISOString(),
+                          fecha: date.toISOString(),
                           production_station: station
                         });
                       }}
@@ -168,52 +143,35 @@ const CalendarView = ({
                             Sin programación
                           </div>
                         ) : (
-                          lots.map(lot => (
+                          lots.map((lot, idx) => (
                             <div
-                              key={lot.id}
+                              key={lot._id || idx}
                               className={`
                                 p-2 rounded-md border-2 cursor-pointer
                                 hover:shadow-md transition-shadow
-                                ${getStatusColor(lot.status)}
+                                ${getStatusColor(lot.status || 'planned')}
                               `}
                               onClick={() => onEditItem?.(lot, 'lot')}
                             >
-                              {/* Lot Number */}
                               <div className="font-bold text-sm mb-1">
-                                {lot.lot_number}
+                                {lot.producto || 'Producto sin nombre'}
                               </div>
-                              
-                              {/* Product Name */}
-                              <div className="text-xs font-semibold mb-1 line-clamp-2">
-                                {lot.product?.product_name || 'Producto sin nombre'}
+                              <div className="text-xs font-medium mb-1">
+                                {lot.tamanioLote || 'Sin tamaño'}
                               </div>
-                              
-                              {/* Quantity */}
-                              <div className="text-xs mb-1">
-                                {lot.quantity ? `${lot.quantity.toLocaleString()} unidades` : ''}
-                              </div>
-                              
-                              {/* Priority Badge */}
-                              {lot.priority && (
-                                <span className={`
-                                  inline-block px-2 py-0.5 rounded text-xs font-bold
-                                  ${getPriorityBadge(lot.priority)}
-                                `}>
-                                  {lot.priority === 'urgent' ? 'URGENTE' : lot.priority.toUpperCase()}
-                                </span>
-                              )}
-                              
-                              {/* Notes/Legend */}
-                              {lot.notes && (
-                                <div className="text-xs mt-1 italic text-muted-foreground line-clamp-1">
-                                  {lot.notes}
+                              {lot.distribucion1 && (
+                                <div className="text-xs text-muted-foreground">
+                                  D1: {lot.distribucion1}
                                 </div>
                               )}
-                              
-                              {/* Due Date if exists */}
-                              {lot.scheduled_end && (
-                                <div className="text-xs mt-1 font-medium">
-                                  Fecha límite: {new Date(lot.scheduled_end).toLocaleDateString('es-ES')}
+                              {lot.distribucion2 && (
+                                <div className="text-xs text-muted-foreground">
+                                  D2: {lot.distribucion2}
+                                </div>
+                              )}
+                              {lot.distribucion3 && (
+                                <div className="text-xs text-muted-foreground">
+                                  D3: {lot.distribucion3}
                                 </div>
                               )}
                             </div>
@@ -231,15 +189,13 @@ const CalendarView = ({
     );
   };
 
-  // Render month view (calendar style)
+  // Render month view
   const renderMonthView = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
     const startDate = new Date(firstDay);
     
-    // Adjust to start on Monday
     const firstDayOfWeek = firstDay.getDay();
     const offset = firstDayOfWeek === 0 ? -6 : 1 - firstDayOfWeek;
     startDate.setDate(startDate.getDate() + offset);
@@ -257,7 +213,6 @@ const CalendarView = ({
 
     return (
       <div className="p-4">
-        {/* Month header */}
         <div className="grid grid-cols-7 gap-1 mb-2">
           {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map(day => (
             <div key={day} className="p-2 text-center text-sm font-bold text-foreground bg-muted">
@@ -266,7 +221,6 @@ const CalendarView = ({
           ))}
         </div>
         
-        {/* Month grid */}
         <div className="grid grid-cols-7 gap-1">
           {days.map((date, index) => {
             const isCurrentMonth = date.getMonth() === currentMonth;
@@ -274,15 +228,9 @@ const CalendarView = ({
             const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
             
             const dayLots = lotSchedules.filter(lot => {
-              const startDate = new Date(lot.scheduled_start);
-              const endDate = new Date(lot.scheduled_end);
-              return startDate.toDateString() === date.toDateString() || 
-                     (startDate <= date && endDate >= date);
-            });
-            
-            const dayEvents = calendarEvents.filter(event => {
-              const eventDate = new Date(event.start_time);
-              return eventDate.toDateString() === date.toDateString();
+              // Si el lote no tiene fecha, usar la fecha actual
+              const lotDate = lot.fecha ? new Date(lot.fecha) : new Date();
+              return lotDate.toDateString() === date.toDateString();
             });
 
             return (
@@ -299,57 +247,34 @@ const CalendarView = ({
                   onSelectDate?.(date);
                 }}
                 onDoubleClick={() => {
-                  const startTime = new Date(date);
-                  startTime.setHours(8, 0, 0, 0);
                   onCreateEvent?.({
-                    start_time: startTime.toISOString()
+                    fecha: date.toISOString()
                   });
                 }}
               >
-                {/* Date number */}
                 <div className={`text-sm font-bold mb-2 ${isToday ? 'text-primary' : ''}`}>
                   {date.getDate()}
                 </div>
                 
-                {/* Lots */}
                 <div className="space-y-1">
-                  {dayLots.slice(0, 2).map(lot => (
+                  {dayLots.slice(0, 2).map((lot, idx) => (
                     <div
-                      key={lot.id}
-                      className={`
-                        text-xs p-1 rounded cursor-pointer truncate border-l-2
-                        ${getStatusColor(lot.status)}
-                      `}
+                      key={idx}
+                      className="text-xs p-1 rounded cursor-pointer truncate border-l-2 bg-blue-100 border-blue-500"
                       onClick={(e) => {
                         e.stopPropagation();
                         onEditItem?.(lot, 'lot');
                       }}
-                      title={`${lot.lot_number} - ${lot.product?.product_name}`}
+                      title={lot.producto}
                     >
-                      <div className="font-semibold">{lot.lot_number}</div>
-                      <div className="text-xs truncate">{lot.product?.product_name}</div>
+                      <div className="font-semibold">{lot.producto}</div>
+                      <div className="text-xs">{lot.tamanioLote}</div>
                     </div>
                   ))}
                   
-                  {/* Events */}
-                  {dayEvents.slice(0, 1).map(event => (
-                    <div
-                      key={event.id}
-                      className="text-xs p-1 rounded cursor-pointer truncate bg-blue-100 border-l-2 border-blue-500"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditItem?.(event, 'event');
-                      }}
-                      title={event.title}
-                    >
-                      {event.title}
-                    </div>
-                  ))}
-                  
-                  {/* More indicator */}
-                  {(dayLots.length + dayEvents.length) > 3 && (
+                  {dayLots.length > 2 && (
                     <div className="text-xs text-muted-foreground font-medium">
-                      +{dayLots.length + dayEvents.length - 3} más
+                      +{dayLots.length - 2} más
                     </div>
                   )}
                 </div>
@@ -361,18 +286,12 @@ const CalendarView = ({
     );
   };
 
-  // Render day view (detailed list)
+  // Render day view
   const renderDayView = () => {
     const dayLots = lotSchedules.filter(lot => {
-      const startDate = new Date(lot.scheduled_start);
-      const endDate = new Date(lot.scheduled_end);
-      return startDate.toDateString() === currentDate.toDateString() || 
-             (startDate <= currentDate && endDate >= currentDate);
-    });
-    
-    const dayEvents = calendarEvents.filter(event => {
-      const eventDate = new Date(event.start_time);
-      return eventDate.toDateString() === currentDate.toDateString();
+      // Si el lote no tiene fecha, usar la fecha actual
+      const lotDate = lot.fecha ? new Date(lot.fecha) : new Date();
+      return lotDate.toDateString() === currentDate.toDateString();
     });
 
     const today = new Date();
@@ -380,7 +299,6 @@ const CalendarView = ({
 
     return (
       <div className="p-6">
-        {/* Day header */}
         <div className="mb-6 text-center">
           <h2 className={`text-2xl font-bold mb-2 ${isToday ? 'text-primary' : ''}`}>
             {currentDate.toLocaleDateString('es-ES', { 
@@ -390,29 +308,10 @@ const CalendarView = ({
               day: 'numeric' 
             })}
           </h2>
-          <div className="flex justify-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onCreateEvent?.({ start_time: currentDate.toISOString() })}
-              iconName="Plus"
-            >
-              Crear Evento
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => onEditItem?.(null, 'lot')}
-              iconName="Plus"
-            >
-              Nuevo Lote
-            </Button>
-          </div>
         </div>
 
-        {/* Lots section */}
         <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-4 flex items-center">
-            <Icon name="Package" size={20} className="mr-2" />
+          <h3 className="text-lg font-semibold mb-4">
             Lotes Programados ({dayLots.length})
           </h3>
           
@@ -422,90 +321,32 @@ const CalendarView = ({
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {dayLots.map(lot => (
+              {dayLots.map((lot, idx) => (
                 <div
-                  key={lot.id}
-                  className={`
-                    p-4 rounded-lg border-2 cursor-pointer
-                    hover:shadow-lg transition-shadow
-                    ${getStatusColor(lot.status)}
-                  `}
+                  key={idx}
+                  className="p-4 rounded-lg border-2 border-blue-300 bg-blue-50 cursor-pointer hover:shadow-lg transition-shadow"
                   onClick={() => onEditItem?.(lot, 'lot')}
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="font-bold text-lg">{lot.lot_number}</div>
-                    {lot.priority && (
-                      <span className={`
-                        px-2 py-1 rounded text-xs font-bold
-                        ${getPriorityBadge(lot.priority)}
-                      `}>
-                        {lot.priority.toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="font-semibold mb-2">
-                    {lot.product?.product_name}
-                  </div>
-                  
-                  {lot.quantity && (
-                    <div className="text-sm mb-2">
-                      Cantidad: {lot.quantity.toLocaleString()} unidades
-                    </div>
+                  <div className="font-bold text-lg mb-2">{lot.producto}</div>
+                  <div className="text-sm mb-2">Tamaño: {lot.tamanioLote}</div>
+                  {lot.distribucion1 && (
+                    <div className="text-sm">Dist. 1: {lot.distribucion1}</div>
                   )}
-                  
-                  {lot.production_station && (
-                    <div className="text-sm mb-2">
-                      Estación: {lot.production_station}
-                    </div>
+                  {lot.distribucion2 && (
+                    <div className="text-sm">Dist. 2: {lot.distribucion2}</div>
                   )}
-                  
-                  {lot.notes && (
-                    <div className="text-sm italic text-muted-foreground mt-2">
-                      {lot.notes}
-                    </div>
+                  {lot.distribucion3 && (
+                    <div className="text-sm">Dist. 3: {lot.distribucion3}</div>
                   )}
                 </div>
               ))}
             </div>
           )}
         </div>
-
-        {/* Events section */}
-        {dayEvents.length > 0 && (
-          <div>
-            <h3 className="text-lg font-semibold mb-4 flex items-center">
-              <Icon name="Calendar" size={20} className="mr-2" />
-              Eventos ({dayEvents.length})
-            </h3>
-            
-            <div className="space-y-3">
-              {dayEvents.map(event => (
-                <div
-                  key={event.id}
-                  className="p-4 rounded-lg border-2 border-blue-300 bg-blue-50 cursor-pointer hover:shadow-lg transition-shadow"
-                  onClick={() => onEditItem?.(event, 'event')}
-                >
-                  <div className="font-bold mb-1">{event.title}</div>
-                  {event.description && (
-                    <div className="text-sm text-muted-foreground">{event.description}</div>
-                  )}
-                  <div className="text-xs text-muted-foreground mt-2">
-                    {new Date(event.start_time).toLocaleTimeString('es-ES', { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     );
   };
 
-  // Render appropriate view
   const renderView = () => {
     switch (view) {
       case 'month':
@@ -526,4 +367,4 @@ const CalendarView = ({
   );
 };
 
-export default CalendarView;
+export { CalendarView };
