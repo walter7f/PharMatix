@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import Icon from '../AppIcon';
 
 const UserContext = ({ isCollapsed = false }) => {
-  // Función para obtener datos del localStorage
+
   const getUserData = () => {
     try {
-      const userData = localStorage.getItem('harmatrix_user');
+      const userData = localStorage.getItem('pharmatrix_user');
       if (userData) {
         const parsedData = JSON.parse(userData);
         return {
