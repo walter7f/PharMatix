@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 const CalendarView = ({ 
   view, 
   currentDate, 
-  lotSchedules = [], 
+  lotSchedules = [],
+  areas = [],
   onSelectDate,
   onCreateEvent,
   onEditItem
@@ -27,21 +28,13 @@ const CalendarView = ({
     return days;
   };
 
-  // Get unique production areas/stations
+  // Get unique production areas/stations from API areas
   const getProductionStations = () => {
-    // Siempre retornar todas las estaciones de trabajo
-    return [
-      'PREPARACION',
-      'LLENADO LIQUIDOS',
-      'LLENADO SEMISOLIDOS',
-      'GRANULACION',
-      'MEZCLADO',
-      'LLENADO POLVOS',
-      'ENCAPSULADO',
-      'COMPRESION',
-      'RECUBRIMIENTO',
-      'BLISTER'
-    ];
+    if (!areas || areas.length === 0) return [];
+    
+    // Extract area names and sort them
+    const stationNames = areas.map(area => area.area_nombre).filter(Boolean);
+    return [...new Set(stationNames)].sort();
   };
 
   // Get lots for specific date and station
@@ -49,11 +42,11 @@ const CalendarView = ({
     const dateStr = date.toDateString();
     
     return lotSchedules.filter(lot => {
-      // Si el lote no tiene fecha, usar la fecha actual
-      const lotDate = lot.fecha ? new Date(lot.fecha) : new Date();
+      // Use fechaPhani as the primary date field
+      const lotDate = lot.fechaPhani ? new Date(lot.fechaPhani) : (lot.fecha ? new Date(lot.fecha) : new Date());
       
-      // Si el lote no tiene estación, asignar PREPARACION por defecto
-      const lotStation = lot.production_station || 'PREPARACION';
+      // Use areaFabricacion as the primary station field
+      const lotStation = lot.areaFabricacion || lot.production_station || 'PREPARACION';
       
       const matchesStation = lotStation === station;
       const matchesDate = lotDate.toDateString() === dateStr;
@@ -132,8 +125,8 @@ const CalendarView = ({
                       }`}
                       onDoubleClick={() => {
                         onCreateEvent?.({
-                          fecha: date.toISOString(),
-                          production_station: station
+                          fechaPhani: date.toISOString(),
+                          areaFabricacion: station
                         });
                       }}
                     >
@@ -228,8 +221,8 @@ const CalendarView = ({
             const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
             
             const dayLots = lotSchedules.filter(lot => {
-              // Si el lote no tiene fecha, usar la fecha actual
-              const lotDate = lot.fecha ? new Date(lot.fecha) : new Date();
+              // Use fechaPhani as the primary date field
+              const lotDate = lot.fechaPhani ? new Date(lot.fechaPhani) : (lot.fecha ? new Date(lot.fecha) : new Date());
               return lotDate.toDateString() === date.toDateString();
             });
 
@@ -248,7 +241,7 @@ const CalendarView = ({
                 }}
                 onDoubleClick={() => {
                   onCreateEvent?.({
-                    fecha: date.toISOString()
+                    fechaPhani: date.toISOString()
                   });
                 }}
               >
@@ -289,8 +282,8 @@ const CalendarView = ({
   // Render day view
   const renderDayView = () => {
     const dayLots = lotSchedules.filter(lot => {
-      // Si el lote no tiene fecha, usar la fecha actual
-      const lotDate = lot.fecha ? new Date(lot.fecha) : new Date();
+      // Use fechaPhani as the primary date field
+      const lotDate = lot.fechaPhani ? new Date(lot.fechaPhani) : (lot.fecha ? new Date(lot.fecha) : new Date());
       return lotDate.toDateString() === currentDate.toDateString();
     });
 

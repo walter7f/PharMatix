@@ -1,4 +1,3 @@
-// LotPlanningPage.jsx - Página principal integrada
 import React, { useState, useEffect } from 'react';
 import { CalendarView } from './components/CalendarView';
 import LotModal from './components/LotModal';
@@ -6,20 +5,41 @@ import LotModal from './components/LotModal';
 const LotPlanningPage = () => {
   // Data states
   const [lotSchedules, setLotSchedules] = useState([]);
+  const [areas, setAreas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Filter states
+  const [selectedPlant, setSelectedPlant] = useState('FARMA'); // Default to FARMA
   
   // Modal states
   const [showLotModal, setShowLotModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   
   // Calendar states
-  const [currentView, setCurrentView] = useState('month');
+  const [currentView, setCurrentView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
 
-  // Load data from API
-  const loadData = async () => {
+  // Load areas from API
+  const loadAreas = async () => {
+    try {
+      const response = await fetch('https://backend-pharmatrix.onrender.com/api/pharmatrix/areaf');
+      
+      if (!response.ok) {
+        throw new Error('Error al cargar las áreas');
+      }
+      
+      const result = await response.json();
+      const areasData = result.data || result || [];
+      setAreas(areasData);
+    } catch (error) {
+      console.error('Error loading areas:', error);
+    }
+  };
+
+  // Load lots from API
+  const loadLots = async () => {
     setLoading(true);
     setError(null);
     
@@ -31,17 +51,10 @@ const LotPlanningPage = () => {
       }
       
       const result = await response.json();
+      const lotsData = result.data || result || [];
       
-      // Procesar los lotes y agregar fecha actual y estación por defecto
-      const processedLots = (result.data || result || []).map(lot => ({
-        ...lot,
-        fecha: lot.fecha || new Date().toISOString(), // Fecha actual si no tiene
-        production_station: lot.production_station || 'PREPARACION', // Estación por defecto
-        status: lot.status || 'planned' // Estado por defecto
-      }));
-      
-      console.log('Lotes cargados:', processedLots);
-      setLotSchedules(processedLots);
+      console.log('Lotes cargados:', lotsData);
+      setLotSchedules(lotsData);
     } catch (error) {
       setError(`Error al cargar datos: ${error.message}`);
     } finally {
@@ -49,10 +62,23 @@ const LotPlanningPage = () => {
     }
   };
 
-  // Initial data load
+  // Load data on mount
   useEffect(() => {
-    loadData();
+    loadAreas();
+    loadLots();
   }, []);
+
+  // Filter lots by selected plant
+  const getFilteredLots = () => {
+    if (!selectedPlant) return lotSchedules;
+    return lotSchedules.filter(lot => lot.planta === selectedPlant);
+  };
+
+  // Get filtered areas for the calendar
+  const getFilteredAreas = () => {
+    if (!selectedPlant) return areas;
+    return areas.filter(area => area.Planta === selectedPlant);
+  };
 
   // Handle create new lot
   const handleCreateLot = () => {
@@ -70,8 +96,7 @@ const LotPlanningPage = () => {
 
   // Handle item saved
   const handleItemSaved = (newLot) => {
-    // Reload data after saving
-    loadData();
+    loadLots();
     setShowLotModal(false);
     setEditingItem(null);
   };
@@ -110,8 +135,16 @@ const LotPlanningPage = () => {
 
   // Handle create event (double click on calendar)
   const handleCreateEvent = (eventData) => {
-    setEditingItem(eventData);
+    setEditingItem({
+      ...eventData,
+      planta: selectedPlant // Pass selected plant to the modal
+    });
     setShowLotModal(true);
+  };
+
+  // Handle plant filter change
+  const handlePlantChange = (plant) => {
+    setSelectedPlant(plant);
   };
 
   if (loading && lotSchedules.length === 0) {
@@ -125,6 +158,8 @@ const LotPlanningPage = () => {
     );
   }
 
+  const filteredLots = getFilteredLots();
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -133,7 +168,7 @@ const LotPlanningPage = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <h1 className="text-2xl font-semibold text-foreground">
-                Planificación de Lotes - Pharmatrix
+                Planificación de Lotes - Phamadel
               </h1>
               
               {/* Navigation buttons */}
@@ -173,6 +208,33 @@ const LotPlanningPage = () => {
             </div>
 
             <div className="flex items-center space-x-3">
+              {/* Plant Filter */}
+              <div className="flex items-center space-x-2">
+                <label className="text-sm font-medium text-foreground">Planta:</label>
+                <div className="flex items-center bg-muted rounded-lg p-1">
+                  <button
+                    onClick={() => handlePlantChange('FARMA')}
+                    className={`px-4 py-1 text-sm rounded transition-colors ${
+                      selectedPlant === 'FARMA' 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'hover:bg-background'
+                    }`}
+                  >
+                    FARMA
+                  </button>
+                  <button
+                    onClick={() => handlePlantChange('BETA')}
+                    className={`px-4 py-1 text-sm rounded transition-colors ${
+                      selectedPlant === 'BETA' 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'hover:bg-background'
+                    }`}
+                  >
+                    BETA
+                  </button>
+                </div>
+              </div>
+
               {/* View Toggle */}
               <div className="flex items-center bg-muted rounded-lg p-1">
                 {['month', 'week', 'day'].map(view => (
@@ -202,6 +264,22 @@ const LotPlanningPage = () => {
               </button>
             </div>
           </div>
+
+          {/* Stats Bar */}
+          <div className="mt-4 flex items-center space-x-6 text-sm">
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-primary rounded"></div>
+              <span className="text-muted-foreground">
+                Total de lotes: <span className="font-semibold text-foreground">{filteredLots.length}</span>
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-green-500 rounded"></div>
+              <span className="text-muted-foreground">
+                Áreas activas: <span className="font-semibold text-foreground">{getFilteredAreas().length}</span>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -226,7 +304,8 @@ const LotPlanningPage = () => {
             <CalendarView
               view={currentView}
               currentDate={currentDate}
-              lotSchedules={lotSchedules}
+              lotSchedules={filteredLots}
+              areas={getFilteredAreas()}
               onSelectDate={setSelectedDate}
               onCreateEvent={handleCreateEvent}
               onEditItem={handleEditItem}
@@ -241,6 +320,9 @@ const LotPlanningPage = () => {
           isOpen={showLotModal}
           onClose={handleModalClose}
           editingLot={editingItem}
+          defaultDate={editingItem?.fechaPhani}
+          defaultArea={editingItem?.areaFabricacion}
+          defaultPlant={editingItem?.planta || selectedPlant}
           onSaved={handleItemSaved}
         />
       )}

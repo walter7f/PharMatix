@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
 
-const LotModal = ({ isOpen, onClose, editingLot, onSaved }) => {
+const LotModal = ({ isOpen, onClose, editingLot, onSaved, defaultDate, defaultArea, defaultPlant }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [loadingAreas, setLoadingAreas] = useState(false);
+  const [areas, setAreas] = useState([]);
 
   // Form state
   const [formData, setFormData] = useState({
     producto: '',
+    fechaPhani: '',
+    areaFabricacion: '',
+    planta: '',
     tamanioLote: '',
     distribucion1: '',
     distribucion2: '',
@@ -16,13 +21,50 @@ const LotModal = ({ isOpen, onClose, editingLot, onSaved }) => {
     distribucion5: ''
   });
 
+  // Load areas from API
+  const loadAreas = async () => {
+    setLoadingAreas(true);
+    try {
+      const response = await fetch('https://backend-pharmatrix.onrender.com/api/pharmatrix/areaf');
+      
+      if (!response.ok) {
+        throw new Error('Error al cargar las áreas de fabricación');
+      }
+      
+      const result = await response.json();
+      const areasData = result.data || result || [];
+      setAreas(areasData);
+    } catch (error) {
+      console.error('Error loading areas:', error);
+      setError('Error al cargar las áreas de fabricación');
+    } finally {
+      setLoadingAreas(false);
+    }
+  };
+
   // Initialize form
   useEffect(() => {
     if (isOpen) {
+      loadAreas();
+      
       if (editingLot) {
         // Edit mode
+        const lotDate = editingLot.fechaPhani || editingLot.fecha || '';
+        let formattedDate = '';
+        if (lotDate) {
+          const date = new Date(lotDate);
+          // Format as YYYY-MM-DD in local timezone
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          formattedDate = `${year}-${month}-${day}`;
+        }
+        
         setFormData({
           producto: editingLot?.producto || '',
+          fechaPhani: formattedDate,
+          areaFabricacion: editingLot?.areaFabricacion || editingLot?.production_station || '',
+          planta: editingLot?.planta || '',
           tamanioLote: editingLot?.tamanioLote || '',
           distribucion1: editingLot?.distribucion1 || '',
           distribucion2: editingLot?.distribucion2 || '',
@@ -31,9 +73,22 @@ const LotModal = ({ isOpen, onClose, editingLot, onSaved }) => {
           distribucion5: editingLot?.distribucion5 || ''
         });
       } else {
-        // Create mode - reset form
+        // Create mode - use defaults if provided
+        let defaultDateFormatted = '';
+        if (defaultDate) {
+          const date = new Date(defaultDate);
+          // Format as YYYY-MM-DD in local timezone
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          defaultDateFormatted = `${year}-${month}-${day}`;
+        }
+        
         setFormData({
           producto: '',
+          fechaPhani: defaultDateFormatted,
+          areaFabricacion: defaultArea || '',
+          planta: defaultPlant || '',
           tamanioLote: '',
           distribucion1: '',
           distribucion2: '',
@@ -46,7 +101,7 @@ const LotModal = ({ isOpen, onClose, editingLot, onSaved }) => {
       setError(null);
       setSuccess(false);
     }
-  }, [isOpen, editingLot]);
+  }, [isOpen, editingLot, defaultDate, defaultArea, defaultPlant]);
 
   // Handle input change
   const handleInputChange = (e) => {
@@ -57,12 +112,30 @@ const LotModal = ({ isOpen, onClose, editingLot, onSaved }) => {
     }));
   };
 
+  // Filter areas by selected plant
+  const getFilteredAreas = () => {
+    if (!formData.planta) return areas;
+    return areas.filter(area => area.Planta === formData.planta);
+  };
+
   // Validate form
   const validateForm = () => {
     const errors = [];
     
     if (!formData.producto.trim()) {
       errors.push('Producto es requerido');
+    }
+    
+    if (!formData.fechaPhani) {
+      errors.push('Fecha de planificación es requerida');
+    }
+    
+    if (!formData.areaFabricacion) {
+      errors.push('Área de fabricación es requerida');
+    }
+    
+    if (!formData.planta) {
+      errors.push('Planta es requerida');
     }
     
     if (!formData.tamanioLote.trim()) {
@@ -86,12 +159,21 @@ const LotModal = ({ isOpen, onClose, editingLot, onSaved }) => {
     setError(null);
 
     try {
+      // Prepare data to send - convert date to ISO string
+      const dataToSend = {
+        ...formData,
+        // Convert YYYY-MM-DD to ISO string at start of day in local timezone
+        fechaPhani: formData.fechaPhani ? new Date(formData.fechaPhani + 'T00:00:00').toISOString() : null
+      };
+
+      console.log('Sending data:', dataToSend);
+
       const response = await fetch('https://backend-pharmatrix.onrender.com/api/pharmatrix/lote', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(dataToSend)
       });
 
       const result = await response.json();
@@ -144,7 +226,7 @@ const LotModal = ({ isOpen, onClose, editingLot, onSaved }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <p className="text-sm text-green-600 font-medium">
-                  Lote creado exitosamente
+                  Lote {editingLot ? 'actualizado' : 'creado'} exitosamente
                 </p>
               </div>
             </div>
@@ -181,6 +263,68 @@ const LotModal = ({ isOpen, onClose, editingLot, onSaved }) => {
                   required
                   disabled={loading}
                 />
+              </div>
+
+              {/* Fecha de Planificación */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Fecha de Planificación *
+                </label>
+                <input
+                  type="date"
+                  name="fechaPhani"
+                  value={formData.fechaPhani}
+                  onChange={handleInputChange}
+                  className="w-full p-3 border border-border rounded-md bg-background text-foreground focus:ring-2 focus:ring-primary focus:border-transparent"
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              {/* Planta */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Planta *
+                </label>
+                <select
+                  name="planta"
+                  value={formData.planta}
+                  onChange={handleInputChange}
+                  className="w-full p-3 border border-border rounded-md bg-background text-foreground focus:ring-2 focus:ring-primary focus:border-transparent"
+                  required
+                  disabled={loading || loadingAreas}
+                >
+                  <option value="">Seleccione una planta</option>
+                  <option value="FARMA">FARMA</option>
+                  <option value="BETA">BETA</option>
+                </select>
+              </div>
+
+              {/* Área de Fabricación */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Área de Fabricación *
+                </label>
+                <select
+                  name="areaFabricacion"
+                  value={formData.areaFabricacion}
+                  onChange={handleInputChange}
+                  className="w-full p-3 border border-border rounded-md bg-background text-foreground focus:ring-2 focus:ring-primary focus:border-transparent"
+                  required
+                  disabled={loading || loadingAreas || !formData.planta}
+                >
+                  <option value="">
+                    {!formData.planta ? 'Primero seleccione una planta' : 'Seleccione un área'}
+                  </option>
+                  {getFilteredAreas().map((area) => (
+                    <option key={area.id} value={area.area_nombre}>
+                      {area.area_nombre}
+                    </option>
+                  ))}
+                </select>
+                {loadingAreas && (
+                  <p className="text-xs text-muted-foreground mt-1">Cargando áreas...</p>
+                )}
               </div>
 
               {/* Tamaño de Lote */}
