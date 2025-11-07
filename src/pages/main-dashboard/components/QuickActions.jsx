@@ -13,7 +13,7 @@ const QuickActions = () => {
       description: 'Crear registro de nuevo lote de producción',
       icon: 'Plus',
       color: 'bg-primary text-primary-foreground',
-      route: '/batch-record-management',
+      route: '/lot-planning',
       action: 'create'
     },
     {

@@ -34,7 +34,7 @@ const CalendarView = ({
     
     // Extract area names and sort them
     const stationNames = areas.map(area => area.area_nombre).filter(Boolean);
-    return [...new Set(stationNames)].sort();
+    return [...new Set(stationNames)];//.sort();
   };
 
   // Get lots for specific date and station
@@ -133,7 +133,7 @@ const CalendarView = ({
                       <div className="space-y-2 min-h-[80px]">
                         {lots.length === 0 ? (
                           <div className="text-center text-muted-foreground text-xs py-4">
-                            Sin programación
+                            
                           </div>
                         ) : (
                           lots.map((lot, idx) => (

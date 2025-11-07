@@ -309,7 +309,9 @@ const LotPlanningPage = () => {
               onSelectDate={setSelectedDate}
               onCreateEvent={handleCreateEvent}
               onEditItem={handleEditItem}
+              preserveAreaOrder={true}
             />
+
           </div>
         </div>
       </div>

@@ -11,6 +11,8 @@ import BatchRecordManagement from './pages/batch-record-management';
 import DeviationManagement from './pages/deviation-management';
 import NotFound from './pages/NotFound';
 import LotPlanningPage from './pages/lot-planning';
+import EmisionPage from 'pages/emision/EmisionPage';
+import SupervisoresDashboardf from 'pages/supervision-fabricacion/SupervisoresDashboard'
 
 const Routes = () => {
   return (
@@ -27,6 +29,8 @@ const Routes = () => {
             <Route path="/batch-record-management" element={<BatchRecordManagement />} />
             <Route path="/deviation-management" element={<DeviationManagement />} />
             <Route path="/lot-planning" element={<LotPlanningPage />} />
+            <Route path="/emision" element={<EmisionPage/>}/> 
+            <Route path='/supervisor' element={<SupervisoresDashboardf/>}/>
             <Route path="*" element={<NotFound />} />
           </RouterRoutes>
         </AuthProvider>

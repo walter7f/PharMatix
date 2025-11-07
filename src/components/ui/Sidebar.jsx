@@ -2,6 +2,8 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Icon from '../AppIcon';
 import { useAuth } from '../../contexts/AuthContext';
+import { path } from 'd3';
+import { icons } from 'lucide-react';
 
 const Sidebar = ({ collapsed, onToggle, currentPath }) => {
   const location = useLocation();
@@ -44,7 +46,18 @@ const Sidebar = ({ collapsed, onToggle, currentPath }) => {
       icon: 'AlertTriangle',
       label: 'Desviaciones',
       description: 'Gestión de incidencias'
+    },
+    {
+      path: '/emision',
+      icon: 'master',
+      label: 'Documentacion'
+    },
+    {
+      path: '/supervisor',
+      icon: 'supervisor ',
+      label: 'Supervisor'
     }
+    
   ];
 
   const handleSignOut = async () => {

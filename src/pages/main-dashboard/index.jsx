@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../../components/ui/Header';
 import Sidebar from '../../components/ui/Sidebar';
 import BreadcrumbTrail from '../../components/ui/BreadcrumbTrail';
-import KPICard from './components/KPICard';
+import { KPIContainer } from './components/KPICard'; // Importar KPIContainer en lugar de KPICard
 import AlertsPanel from './components/AlertsPanel';
 import ProductionOverview from './components/ProductionOverview';
 import AuditActivities from './components/AuditActivities';
 import QuickActions from './components/QuickActions';
+import BatchAnalysis from './components/BatchAnalysis';
+
 
 const MainDashboard = () => {
   const navigate = useNavigate();
@@ -24,7 +26,7 @@ const MainDashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const kpiData = [
+  /*const kpiData = [
     {
       title: 'Lotes Activos',
       value: '12',
@@ -65,7 +67,7 @@ const MainDashboard = () => {
       severity: 'success',
       onClick: () => navigate('/main-dashboard')
     }
-  ];
+  ];*/
 
   const handleSidebarToggle = () => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
@@ -126,22 +128,8 @@ const MainDashboard = () => {
             </div>
           </div>
 
-          {/* KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {kpiData?.map((kpi, index) => (
-              <KPICard
-                key={index}
-                title={kpi?.title}
-                value={kpi?.value}
-                subtitle={kpi?.subtitle}
-                icon={kpi?.icon}
-                trend={kpi?.trend}
-                trendValue={kpi?.trendValue}
-                severity={kpi?.severity}
-                onClick={kpi?.onClick}
-              />
-            ))}
-          </div>
+          {/* KPI Cards - REEMPLAZAR con KPIContainer */}
+          <KPIContainer />
 
           {/* Quick Actions */}
           <QuickActions />
@@ -151,6 +139,14 @@ const MainDashboard = () => {
 
           {/* Production Overview */}
           <ProductionOverview />
+
+          {/* Audit Activities and Deadlines */}
+          <AuditActivities />
+          {/* Production Overview */}
+          <ProductionOverview />
+
+          {/* Batch Analysis */}
+          <BatchAnalysis />
 
           {/* Audit Activities and Deadlines */}
           <AuditActivities />
